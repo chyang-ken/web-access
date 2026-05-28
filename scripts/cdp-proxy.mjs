@@ -345,20 +345,24 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(pages, null, 2));
     }
 
-    // POST /new (body=URL) - 创建新后台 tab
+    // POST /new[?contextId=xxx] (body=URL) - 创建新后台 tab
+    // contextId 用来跨 Chrome profile 创建 tab（user 加载多 profile 时每个 profile
+    // 在 CDP 里对应一个 browserContextId；不传则进 Chrome 当前 active window 的 profile）
     else if (pathname === '/new') {
       if (req.method !== 'POST') {
         res.statusCode = 400;
         res.end(JSON.stringify({
           error: 'v2.5.3 起 /new 改为 POST 传 URL（避免目标 URL 含 query 时被错误切分）',
           migration: 'references/migration-2.5.3.md',
-          example: "curl -X POST --data-raw 'https://example.com' http://localhost:3456/new",
+          example: "curl -X POST --data-raw 'https://example.com' 'http://localhost:3456/new?contextId=xxx'",
         }));
         return;
       }
       const body = (await readBody(req)).trim();
       const targetUrl = body || 'about:blank';
-      const resp = await sendCDP('Target.createTarget', { url: targetUrl, background: true });
+      const params = { url: targetUrl, background: true };
+      if (q.contextId) params.browserContextId = q.contextId;
+      const resp = await sendCDP('Target.createTarget', params);
       const targetId = resp.result.targetId;
       managedTabs.set(targetId, { lastAccessed: Date.now() });
 
@@ -371,6 +375,15 @@ const server = http.createServer(async (req, res) => {
       }
 
       res.end(JSON.stringify({ targetId }));
+    }
+
+    // GET /activate?target=xxx - 把 tab 切到前台（也会切到对应 window/profile）
+    // 用途：default browserContext 的 tab 不能用 createTarget 显式指定 contextId 创建
+    //  （chrome 限制），但可以先 activate 该 context 里某 tab → 那个 window 成为 last-focused
+    //  → 后续 /new 不传 contextId 就会落到该 profile
+    else if (pathname === '/activate') {
+      const resp = await sendCDP('Target.activateTarget', { targetId: q.target });
+      res.end(JSON.stringify(resp.result || {}));
     }
 
     // GET /close?target=xxx - 关闭 tab
@@ -591,7 +604,8 @@ const server = http.createServer(async (req, res) => {
         endpoints: {
           '/health': 'GET - 健康检查',
           '/targets': 'GET - 列出所有页面 tab',
-          '/new': 'POST body=URL - 创建新后台 tab（自动等待加载）',
+          '/new[?contextId=]': 'POST body=URL - 创建新后台 tab（自动等待加载）；contextId 跨 Chrome profile 指定（不传走 active window）',
+          '/activate?target=': 'GET - 把 tab 切到前台（用来切换 Chrome window/profile，配合 /new 落到 default profile）',
           '/close?target=': 'GET - 关闭 tab',
           '/navigate?target=': 'POST body=URL - 导航（自动等待加载）',
           '/back?target=': 'GET - 后退',

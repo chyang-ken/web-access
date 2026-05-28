@@ -21,14 +21,22 @@ curl -s http://localhost:3456/health
 curl -s http://localhost:3456/targets
 ```
 
-### POST /new
+### POST /new[?contextId=ID]
 创建新后台 tab，自动等待页面加载完成。**URL 通过 POST body 原样传入**，无需 URL-encode、不会因 query 中含 `&` 被切分。返回 `{ targetId }`。
 ```bash
 curl -s -X POST --data-raw 'https://example.com' http://localhost:3456/new
 # 含 query 的目标 URL（如带 token 的小红书笔记）也直接原样传：
 curl -s -X POST --data-raw 'https://www.xiaohongshu.com/explore/xxx?xsec_source=app_share&xsec_token=ABC&type=normal' http://localhost:3456/new
+# 本地扩展：跨 Chrome profile 指定 browserContextId
+curl -s -X POST --data-raw 'https://example.com' "http://localhost:3456/new?contextId=CONTEXT_ID"
 ```
 > v2.5.3 起改为 POST。旧的 `GET /new?url=...` 返回 400 + 迁移指引，详见 `migration-2.5.3.md`。
+
+### GET /activate?target=ID
+把指定 tab 切到前台。用于切换 Chrome window/profile：先 activate 某个 profile 下已有 tab，再调用不带 `contextId` 的 `/new`，新 tab 会落到 Chrome 当前 active window 对应的 profile。
+```bash
+curl -s "http://localhost:3456/activate?target=TARGET_ID"
+```
 
 ### GET /close?target=ID
 关闭指定 tab。
