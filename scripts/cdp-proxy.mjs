@@ -275,6 +275,33 @@ async function closeAllManagedTabs() {
   if (targets.length) console.log(`[CDP Proxy] Shutdown: closed ${targets.length} managed tab(s)`);
 }
 
+async function waitForUrlChange(sessionId, previousUrl, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const done = (result) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      clearInterval(checkInterval);
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => done('timeout'), timeoutMs);
+    const checkInterval = setInterval(async () => {
+      try {
+        const resp = await sendCDP('Runtime.evaluate', {
+          expression: 'location.href',
+          returnByValue: true,
+        }, sessionId);
+        const href = resp.result?.result?.value;
+        if (href && href !== previousUrl) {
+          done('changed');
+        }
+      } catch { /* 忽略 */ }
+    }, 100);
+  });
+}
+
 // --- 等待页面加载 ---
 async function waitForLoad(sessionId, timeoutMs = 15000) {
   // 启用 Page 域
@@ -360,7 +387,7 @@ const server = http.createServer(async (req, res) => {
       }
       const body = (await readBody(req)).trim();
       const targetUrl = body || 'about:blank';
-      const params = { url: targetUrl, background: true };
+      const params = { url: 'about:blank', background: true };
       if (q.contextId) params.browserContextId = q.contextId;
       const resp = await sendCDP('Target.createTarget', params);
       const targetId = resp.result.targetId;
@@ -370,6 +397,9 @@ const server = http.createServer(async (req, res) => {
       if (targetUrl !== 'about:blank') {
         try {
           const sid = await ensureSession(targetId);
+          await sendCDP('Page.enable', {}, sid);
+          await sendCDP('Page.navigate', { url: targetUrl }, sid);
+          await waitForUrlChange(sid, 'about:blank');
           await waitForLoad(sid);
         } catch { /* 非致命，继续 */ }
       }
