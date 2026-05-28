@@ -3,8 +3,8 @@ name: web-access
 license: MIT
 github: https://github.com/eze-is/web-access
 description:
-  所有联网操作必须通过此 skill 处理，包括：搜索、网页抓取、登录后操作、网络交互等。
-  触发场景：用户要求搜索信息、查看网页内容、访问需要登录的网站、操作网页界面、抓取社交媒体内容（小红书、微博、推特等）、读取动态渲染页面、以及任何需要真实浏览器环境的网络任务。
+  代替用户使用网页的 skill：搜索资料、查看网页内容、读取或操作用户有权访问的登录后页面、整理/摘录/搬运网页信息。
+  触发场景：用户要 Agent 帮自己看网页、读登录态内容、操作已有网页、抓取社交媒体/私域页面内容（小红书、微博、推特、公众号等），或需要用户日常 Chrome 的 cookie、扩展、历史、书签和已有页面状态。建设/验证产品能力（功能测试、抓取/解析稳定性、console/network/performance/Lighthouse/memory 排查）默认使用 Chrome MCP / 测试浏览器，不由本 skill 承担。
 metadata:
   author: 一泽Eze
   version: "2.5.3"
@@ -12,9 +12,27 @@ metadata:
 
 # web-access Skill
 
+## 适用边界
+
+本 skill 的边界是：**代替用户使用网页**。
+
+适合使用：
+- 帮用户看资料、读网页、整理页面内容。
+- 读取或操作用户已经有权限访问的登录后页面。
+- 使用用户日常 Chrome 的 cookie、扩展、历史、书签、已有 tab 状态。
+- 子 Agent 并行调研时，各自创建后台 tab，完成后关闭自己的 tab。
+
+不默认用于：
+- 建设或验证产品能力。
+- 产品功能测试、E2E、登录流程验证。
+- 判断抓取/解析规则是否稳定。
+- console / network / performance / Lighthouse / memory 排查。
+
+需要登录态时，先判断登录态属于什么任务：代替用户使用网页才走本 skill；产品测试登录态应放在测试浏览器或测试账号里。只有问题明确依赖用户当前 Chrome 状态时，才作为例外临时用本 skill 做观察。
+
 ## 前置检查
 
-在开始联网操作前，先检查 CDP 模式可用性：
+在使用 CDP 模式前，先检查可用性：
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/check-deps.mjs"
